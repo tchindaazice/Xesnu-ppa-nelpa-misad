@@ -10,3 +10,6 @@ pytest
 pytest-asyncio
 ruff
 asyncpg
+passlib[argon2]
+python-jose[cryptography]
+pyotp
