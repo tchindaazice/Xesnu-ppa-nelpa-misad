@@ -1,0 +1,46 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_DB: vpn
+      POSTGRES_USER: vpn
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    restart: always
+  marzban:
+    image: gozargah/marzban:v0.8.4
+    restart: always
+    network_mode: host
+    env_file: .env
+    volumes:
+      - /var/lib/marzban:/var/lib/marzban
+  gateway:
+    build: ../gateway
+    restart: always
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8080:8080"
+  panel:
+    build: ../panel
+    restart: always
+    ports:
+      - "127.0.0.1:8081:80"
+  nginx:
+    image: nginx:stable
+    restart: always
+    network_mode: host
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+volumes:
+  pgdata:
