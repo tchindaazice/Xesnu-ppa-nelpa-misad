@@ -27,7 +27,7 @@ def upgrade() -> None:
     sa.Column('password_hash', sa.String(), nullable=False),
     sa.Column('role', sa.Enum('SUPER_ADMIN', 'ADMIN', 'RESELLER', name='staffrole'), nullable=False),
     sa.Column('totp_secret_enc', sa.String(), nullable=True),
-    sa.Column('country_scope', sa.ARRAY(sa.String()), nullable=True),
+    sa.Column('country_scope', sa.JSON(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=True),
     sa.Column('last_login_at', sa.DateTime(), nullable=True),
     sa.Column('failed_login_attempts', sa.Integer(), nullable=True),
