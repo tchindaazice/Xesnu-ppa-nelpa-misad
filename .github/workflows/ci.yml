@@ -1,0 +1,102 @@
+name: CI & CD
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff pytest httpx
+        if [ -f gateway/requirements.txt ]; then pip install -r gateway/requirements.txt; fi
+
+    - name: Lint with ruff
+      run: |
+        ruff check .
+
+    - name: Run tests
+      run: |
+        export POSTGRES_PASSWORD=test
+        export JWT_SIGNING_KEY=test
+        export MARZBAN_API_USER=test
+        export MARZBAN_API_PASSWORD=test
+        cd gateway
+        PYTHONPATH=. pytest tests/
+
+  build-mobile:
+    needs: lint-and-test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x'
+          channel: 'stable'
+
+      - name: Install dependencies
+        working-directory: ./mobile
+        run: flutter pub get
+
+      - name: Prepare google-services.json
+        run: |
+          mkdir -p mobile/android/app
+          if [ ! -f mobile/android/app/google-services.json ]; then
+            echo '{"project_info": {"project_number": "123456789", "project_id": "dummy-project"}, "client": [{"client_info": {"mobilesdk_app_id": "1:123456789:android:abcdef", "android_client_info": {"package_name": "com.vpnplatform.mobile"}}, "api_key": [{"current_key": "dummy_key"}]}]}' > mobile/android/app/google-services.json
+          fi
+
+      - name: Build APK
+        working-directory: ./mobile
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release.apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+
+  deploy-backend:
+    needs: lint-and-test
+    if: github.ref == 'refs/heads/main' && secrets.SERVER_HOST != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /opt/vpn-platform/infra
+            git fetch --all
+            git reset --hard origin/main
+            docker-compose down
+            docker-compose build
+            docker-compose up -d
