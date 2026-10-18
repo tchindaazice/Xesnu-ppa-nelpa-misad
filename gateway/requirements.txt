@@ -13,3 +13,4 @@ asyncpg
 passlib[argon2]
 python-jose[cryptography]
 pyotp
+psycopg2-binary
